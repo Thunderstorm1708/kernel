@@ -2460,6 +2460,7 @@ static int dwc3_gadget_run_stop_util(struct dwc3 *dwc)
 			dwc->gadget_state = DWC3_GADGET_SOFT_CONN;
 			break;
 		}
+		/* fallthrough */
 	case DWC3_GADGET_SOFT_CONN:
 		if (!dwc->softconnect) {
 			dwc->gadget_state = DWC3_GADGET_INACTIVE;

@@ -870,6 +870,7 @@ int mius_system_configuration_param_get(
 	case MIUS_SYSTEM_CONFIGURATION_CALIBRATION_METHOD:
 		ucontrol->value.integer.value[0] =
 			mius_system_configuration_cache.calibration_method;
+		/* fallthrough */
 	case MIUS_SYSTEM_CONFIGURATION_DEBUG_MODE:
 		ucontrol->value.integer.value[0] =
 			mius_system_configuration_cache.debug_mode;

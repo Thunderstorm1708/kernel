@@ -398,7 +398,6 @@ endif
 KCONFIG_CONFIG	?= .config
 export KCONFIG_CONFIG
 
-CCACHE := ccache
 # SHELL used by kbuild
 CONFIG_SHELL := sh
 
@@ -406,26 +405,43 @@ HOST_LFS_CFLAGS := $(shell getconf LFS_CFLAGS 2>/dev/null)
 HOST_LFS_LDFLAGS := $(shell getconf LFS_LDFLAGS 2>/dev/null)
 HOST_LFS_LIBS := $(shell getconf LFS_LIBS 2>/dev/null)
 
-HOSTCC	= $(CCACHE) clang
-HOSTCXX	= $(CCACHE) clang++
-KBUILD_HOSTCFLAGS   := -Wmissing-prototypes -Wstrict-prototypes -O2 \
-		-fomit-frame-pointer -Wno-visibility -std=gnu89 -Wno-deprecated-declarations $(HOST_LFS_CFLAGS) \
+ifneq ($(LLVM),)
+HOSTCC	= clang
+HOSTCXX	= clang++
+else
+HOSTCC	= gcc
+HOSTCXX	= g++
+endif
+KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
+		-fomit-frame-pointer -std=gnu89 -Wno-deprecated-declarations $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
-KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS) -flto=$(BUILDJOBS)
+KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
 # Make variables (CC, etc...)
 CPP		= $(CC) -E
-REAL_CC	= $(CCACHE) $(CROSS_COMPILE)clang
-LD		= $(CROSS_COMPILE)ld.lld
-AR		= $(CROSS_COMPILE)llvm-ar
-NM		= $(CROSS_COMPILE)llvm-nm
-OBJCOPY		= $(CROSS_COMPILE)llvm-objcopy
-OBJDUMP		= $(CROSS_COMPILE)llvm-objdump
-READELF		= $(CROSS_COMPILE)llvm-readelf
-OBJSIZE		= $(CROSS_COMPILE)llvm-size
-STRIP		= $(CROSS_COMPILE)llvm-strip
+ifneq ($(LLVM),)
+CC		= clang
+LD		= ld.lld
+AR		= llvm-ar
+NM		= llvm-nm
+OBJCOPY		= llvm-objcopy
+OBJDUMP		= llvm-objdump
+READELF		= llvm-readelf
+OBJSIZE		= llvm-size
+STRIP		= llvm-strip
+else
+CC		= $(CROSS_COMPILE)gcc
+LD		= $(CROSS_COMPILE)ld
+AR		= $(CROSS_COMPILE)ar
+NM		= $(CROSS_COMPILE)nm
+OBJCOPY		= $(CROSS_COMPILE)objcopy
+OBJDUMP		= $(CROSS_COMPILE)objdump
+READELF		= $(CROSS_COMPILE)readelf
+OBJSIZE		= $(CROSS_COMPILE)size
+STRIP		= $(CROSS_COMPILE)strip
+endif
 PAHOLE		= pahole
 LEX		= flex
 YACC		= bison
@@ -443,14 +459,6 @@ KLZOP		= lzop
 LZMA		= lzma
 LZ4		= lz4c
 XZ		= xz
-
-ifndef DISABLE_WRAPPER
-# Use the wrapper for the compiler.  This wrapper scans for new
-# warnings and causes the build to stop upon encountering them
-CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
-else
-CC		= $(REAL_CC)
-endif
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
@@ -698,8 +706,8 @@ export RETPOLINE_VDSO_CFLAGS
 ifdef CONFIG_LTO_CLANG
 # LTO produces LLVM IR instead of object files. Use llvm-ar and llvm-nm, so we
 # can process these.
-AR		:= $(CROSS_COMPILE)llvm-ar
-LLVM_NM		:= $(CROSS_COMPILE)llvm-nm
+AR		:= llvm-ar
+LLVM_NM		:= llvm-nm
 export LLVM_NM
 endif
 
@@ -751,6 +759,8 @@ KBUILD_CFLAGS	+= $(call cc-option,-fno-delete-null-pointer-checks)
 KBUILD_CFLAGS	+= $(call cc-disable-warning,frame-address)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, format-truncation)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, format-overflow)
+KBUILD_CFLAGS	+= $(call cc-disable-warning, address)
+KBUILD_CFLAGS   += $(call cc-disable-warning, implicit-fallthrough)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, int-in-bool-context)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, address-of-packed-member)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, attribute-alias)
@@ -760,23 +770,18 @@ KBUILD_CFLAGS  += $(call cc-option, -Wno-maybe-uninitialized)
 KBUILD_CFLAGS  += $(call cc-option, -Wno-psabi)
 KBUILD_CFLAGS  += $(call cc-option, -Wno-deprecated-declarations)
 KBUILD_CPPFLAGS  += $(call cc-option, -Wno-deprecated-declarations)
+KBUILD_CFLAGS   += $(call cc-disable-warning, -Waddress)
+KBUILD_CFLAGS   += $(call cc-disable-warning, -Warray-compare)
+KBUILD_CFLAGS   += $(call cc-disable-warning, -Wunused-function)
+KBUILD_CFLAGS   += $(call cc-disable-warning, -Wparentheses)
+KBUILD_CFLAGS   += $(call cc-disable-warning, -Wunused-variable)
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
-KBUILD_CFLAGS += -O2 -ffast-math
+KBUILD_CFLAGS += -O2
 else ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3
 KBUILD_CFLAGS += -O3
 else ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS += -Os -ffast-math
-endif
-
-# Tell compiler to tune the performance of the code for a specified
-# target processor
-ifeq ($(cc-name),gcc)
-KBUILD_CFLAGS += -mcpu=cortex-a78.cortex-a55 -march=armv8.4-a+crc+crypto
-KBUILD_AFLAGS += -mcpu=cortex-a78.cortex-a55 -march=armv8.4-a+crc+crypto
-else ifeq ($(cc-name),clang)
-KBUILD_CFLAGS += -mcpu=kryo -march=armv8.4-a+crc+crypto+aes+lse+sha3
-KBUILD_AFLAGS += -mcpu=kryo -march=armv8.4-a+crc+crypto+aes+lse+sha3
+KBUILD_CFLAGS += -Os
 endif
 
 # Tell gcc to never replace conditional load with a non-conditional one
@@ -1020,6 +1025,7 @@ KBUILD_CFLAGS += $(call cc-disable-warning, zero-length-bounds)
 KBUILD_CFLAGS += $(call cc-disable-warning, array-bounds)
 KBUILD_CFLAGS += $(call cc-disable-warning, stringop-overflow)
 KBUILD_CFLAGS += $(call cc-disable-warning, visibility)
+
 
 # Another good warning that we'll want to enable eventually
 KBUILD_CFLAGS += $(call cc-disable-warning, restrict)
