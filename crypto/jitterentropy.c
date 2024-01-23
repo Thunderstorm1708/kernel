@@ -103,7 +103,12 @@ struct rand_data {
  * Helper functions
  ***************************************************************************/
 
-#include "jitterentropy.h"
+void jent_get_nstime(__u64 *out);
+void *jent_zalloc(unsigned int len);
+void jent_zfree(void *ptr);
+int jent_fips_enabled(void);
+void jent_panic(char *s);
+void jent_memcpy(void *dest, const void *src, unsigned int n);
 
 /**
  * Update of the loop count used for the next round of
