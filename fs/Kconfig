@@ -329,5 +329,12 @@ config REBOOT_AUTO_FSYNC
 	default y
 	help
 	  Force automatic file sync on power off, reboot, panic/freeze
+	  
+config SUS_FS
+	bool "suspicious-fs"
+	help
+	  This prevents the kernel from revealing KernelSU/Zygisk mount points in /proc 
+	  for non-system apps and also prevents scanning the filesystem for suspicious 
+	  files and directories.
 
 endmenu
